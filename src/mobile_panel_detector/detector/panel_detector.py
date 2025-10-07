@@ -107,24 +107,24 @@ class AdvancedPanelDetector:
         
         # Check 1: Not too dark (exclude dark bars/black screens)
         mean_brightness = np.mean(gray)
-        not_too_dark = mean_brightness > 15  # More lenient for dark screens
+        not_too_dark = mean_brightness > 5  # Very lenient for dark screens
         
         # Check 2: Not too bright (exclude bright lights/reflections)
         not_too_bright = mean_brightness < 240
         
         # Check 3: Standard deviation (screens have content variation)
         std_dev = np.std(gray)
-        has_content = std_dev > 8  # Lower threshold for dark screens
+        has_content = std_dev > 3  # Very low threshold for dark screens
         
         # Check 4: Edge density (mobile screens have text/icons)
         edges = cv2.Canny(gray, 30, 100)
         edge_density = np.sum(edges > 0) / edges.size
-        has_edges = edge_density > 0.02  # Lower threshold for dark screens
+        has_edges = edge_density > 0.005  # Very low threshold for dark screens
         
         # Check 5: Color variety (mobile screens have diverse colors)
         h_hist = cv2.calcHist([hsv], [0], None, [180], [0, 180])
-        h_variety = np.count_nonzero(h_hist > 5)
-        has_colors = h_variety > 3  # Lower threshold for dark screens
+        h_variety = np.count_nonzero(h_hist > 2)
+        has_colors = h_variety > 1  # Very low threshold for dark screens
         
         # Check 6: Not uniform (exclude uniform surfaces)
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])

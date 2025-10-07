@@ -129,12 +129,12 @@ class AdvancedPanelDetector:
         # Check 6: Not uniform (exclude uniform surfaces)
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         dominant_value = np.max(hist)
-        not_uniform = dominant_value < (gray.size * 0.8)  # More lenient for dark screens
+        not_uniform = dominant_value < (gray.size * 0.95)  # Very lenient for dark screens
         
         # Check 7: Texture analysis (mobile screens have fine texture)
         laplacian = cv2.Laplacian(gray, cv2.CV_64F)
         texture_variance = laplacian.var()
-        has_texture = texture_variance > 30  # Lower threshold for dark screens
+        has_texture = texture_variance > 5  # Very low threshold for dark screens
         
         # Check 8: Size constraint for mobile devices (not TV/monitor sized)
         img_area = img_h * img_w
@@ -148,11 +148,11 @@ class AdvancedPanelDetector:
         # Check 10: Minimum size for mobile devices
         min_mobile_size = w >= 80 and h >= 80
         
-        # Score the region (need at least 5 out of 10 for mobile display - more lenient for dark screens)
+        # Score the region (need at least 3 out of 10 for mobile display - very lenient for dark screens)
         score = sum([not_too_dark, not_too_bright, has_content, has_edges, 
                     has_colors, not_uniform, has_texture, mobile_size, mobile_aspect, min_mobile_size])
         
-        return score >= 5
+        return score >= 3
     
     def detect_with_contours(self, image: np.ndarray) -> List[Dict]:
         """Detect rectangular objects - specifically for mobile displays"""
@@ -177,8 +177,8 @@ class AdvancedPanelDetector:
         img_area = height * width
         
         # Mobile device size constraints (much smaller than TVs/monitors)
-        min_area = img_area * 0.005  # 0.5% minimum (mobile devices)
-        max_area = img_area * 0.08   # 8% maximum (exclude large displays)
+        min_area = img_area * 0.002  # 0.2% minimum (mobile devices)
+        max_area = img_area * 0.15   # 15% maximum (exclude large displays)
         
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -201,9 +201,9 @@ class AdvancedPanelDetector:
                 mobile_aspect = 0.5 <= aspect_ratio <= 2.2
                 
                 # Size constraints for mobile devices
-                mobile_width = rect_w <= width * 0.15  # Max 15% of image width
-                mobile_height = rect_h <= height * 0.15  # Max 15% of image height
-                min_size = rect_w >= 80 and rect_h >= 80  # Larger minimum size
+                mobile_width = rect_w <= width * 0.25  # Max 25% of image width
+                mobile_height = rect_h <= height * 0.25  # Max 25% of image height
+                min_size = rect_w >= 50 and rect_h >= 50  # Smaller minimum size
                 
                 if mobile_aspect and mobile_width and mobile_height and min_size:
                     # Get bounding box for the rotated rectangle

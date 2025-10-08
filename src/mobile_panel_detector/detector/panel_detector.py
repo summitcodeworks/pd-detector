@@ -21,9 +21,9 @@ class AdvancedPanelDetector:
         Args:
             yolo_model_path: Path to YOLO model file
         """
-        # Lower confidence for better detection of angled panels and dark screens
-        self.min_yolo_confidence = 0.10
-        self.min_contour_confidence = 0.20
+        # Higher confidence for better selectivity - focus on main smartphones
+        self.min_yolo_confidence = 0.40
+        self.min_contour_confidence = 0.50
         
         # Initialize YOLO model
         try:
@@ -93,18 +93,8 @@ class AdvancedPanelDetector:
         return (int(x), int(y), int(w), int(h)), box
     
     def has_screen_characteristics(self, image: np.ndarray, bbox: Tuple) -> bool:
-        """Check if region has mobile display characteristics - excludes TVs/monitors and dark bars"""
+        """Check if region has display/screen characteristics"""
         x, y, w, h = bbox
-        
-        # Ensure coordinates are within image bounds
-        img_h, img_w = image.shape[:2]
-        x = max(0, min(x, img_w - 1))
-        y = max(0, min(y, img_h - 1))
-        w = min(w, img_w - x)
-        h = min(h, img_h - y)
-        
-        if w <= 0 or h <= 0:
-            return False
         
         # Extract region
         roi = image[y:y+h, x:x+w]
@@ -115,138 +105,76 @@ class AdvancedPanelDetector:
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
         
-        # Check 1: Not too dark (exclude dark bars/black screens)
-        mean_brightness = np.mean(gray)
-        not_too_dark = mean_brightness > 0  # Accept any brightness for dark screens
-        
-        # Check 2: Not too bright (exclude bright lights/reflections)
-        not_too_bright = mean_brightness < 240
-        
-        # Check 3: Standard deviation (screens have content variation)
+        # Check 1: Standard deviation (screens have content variation)
         std_dev = np.std(gray)
-        has_content = std_dev > 1  # Very low threshold for dark screens
+        has_content = std_dev > 15  # Screens have varying content
         
-        # Check 4: Edge density (mobile screens have text/icons)
+        # Check 2: Edge density (screens have text/icons)
         edges = cv2.Canny(gray, 30, 100)
         edge_density = np.sum(edges > 0) / edges.size
-        has_edges = edge_density > 0.001  # Very low threshold for dark screens
+        has_edges = edge_density > 0.05  # At least 5% edges
         
-        # Check 5: Color variety (mobile screens have diverse colors)
+        # Check 3: Color variety (not uniform like lights/tables)
         h_hist = cv2.calcHist([hsv], [0], None, [180], [0, 180])
-        h_variety = np.count_nonzero(h_hist > 2)
-        has_colors = h_variety > 1  # Very low threshold for dark screens
+        h_variety = np.count_nonzero(h_hist > 10)  # Multiple color hues
+        has_colors = h_variety > 5
         
-        # Check 6: Not uniform (exclude uniform surfaces)
+        # Check 4: Brightness (not too bright like lights)
+        mean_brightness = np.mean(gray)
+        not_too_bright = mean_brightness < 240  # Not a pure light
+        
+        # Check 5: Not uniform (tables/walls are uniform)
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         dominant_value = np.max(hist)
-        not_uniform = dominant_value < (gray.size * 0.95)  # Very lenient for dark screens
+        not_uniform = dominant_value < (gray.size * 0.8)  # Not 80% same color
         
-        # Check 7: Texture analysis (mobile screens have fine texture)
-        laplacian = cv2.Laplacian(gray, cv2.CV_64F)
-        texture_variance = laplacian.var()
-        has_texture = texture_variance > 1  # Very low threshold for dark screens
+        # Score the region
+        score = sum([has_content, has_edges, has_colors, not_too_bright, not_uniform])
         
-        # Check 8: Size constraint for mobile devices (not TV/monitor sized)
-        img_area = img_h * img_w
-        roi_area = w * h
-        mobile_size = roi_area < (img_area * 0.30)  # Mobile devices < 30% of image
-        
-        # Check 9: Aspect ratio for mobile devices
-        aspect_ratio = w / h if h > 0 else 0
-        mobile_aspect = 0.5 <= aspect_ratio <= 2.2  # Mobile device aspect ratios
-        
-        # Check 10: Minimum size for mobile devices
-        min_mobile_size = w >= 30 and h >= 30
-        
-        # Score the region (need at least 1 out of 10 for mobile display - very lenient for dark screens)
-        score = sum([not_too_dark, not_too_bright, has_content, has_edges, 
-                    has_colors, not_uniform, has_texture, mobile_size, mobile_aspect, min_mobile_size])
-        
-        return score >= 1
+        return score >= 3  # Need at least 3 out of 5 characteristics
     
     def detect_with_contours(self, image: np.ndarray) -> List[Dict]:
-        """Detect rectangular objects - specifically for mobile displays"""
+        """Detect rectangular objects with screen characteristics"""
         # Preprocess
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         
-        # Multiple edge detection approaches
-        edges1 = cv2.Canny(blurred, 30, 100)
-        edges2 = cv2.Canny(blurred, 50, 150)
-        edges = cv2.bitwise_or(edges1, edges2)
-        
-        # Morphological operations
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        edges = cv2.dilate(edges, kernel, iterations=1)
+        # Edge detection
+        edges = cv2.Canny(blurred, 50, 150)
         
         # Find contours
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         detections = []
         height, width = image.shape[:2]
-        img_area = height * width
-        
-        # Mobile device size constraints (much smaller than TVs/monitors)
-        min_area = img_area * 0.001  # 0.1% minimum (mobile devices)
-        max_area = img_area * 0.30   # 30% maximum (exclude large displays)
+        min_area = (height * width) * 0.04
+        max_area = (height * width) * 0.85
         
         for contour in contours:
             area = cv2.contourArea(contour)
             
             if min_area < area < max_area:
-                # Get minimum area rectangle (handles rotation)
-                rect = cv2.minAreaRect(contour)
-                (cx, cy), (rect_w, rect_h), angle = rect
+                x, y, w, h = cv2.boundingRect(contour)
+                aspect_ratio = float(w) / h if h > 0 else 0
                 
-                # Swap w/h if needed to get correct aspect ratio
-                if rect_w < rect_h:
-                    rect_w, rect_h = rect_h, rect_w
-                    angle = angle + 90
+                # Check aspect ratio (phones + partial panels)
+                valid_aspect = (0.3 <= aspect_ratio <= 0.9) or (1.1 <= aspect_ratio <= 3.0)
                 
-                # Calculate aspect ratio
-                aspect_ratio = float(rect_w) / rect_h if rect_h > 0 else 0
-                
-                # Mobile device aspect ratio constraints
-                # Typical mobile devices: 0.5 (portrait) to 2.0 (landscape)
-                mobile_aspect = 0.5 <= aspect_ratio <= 2.2
-                
-                # Size constraints for mobile devices
-                mobile_width = rect_w <= width * 0.40  # Max 40% of image width
-                mobile_height = rect_h <= height * 0.40  # Max 40% of image height
-                min_size = rect_w >= 20 and rect_h >= 20  # Smaller minimum size for main smartphones
-                
-                # Exclude very thin objects (cables, wires) - both dimensions should be reasonable
-                not_too_thin = min(rect_w, rect_h) >= max(rect_w, rect_h) * 0.2  # Width/height ratio not too extreme
-                
-                if mobile_aspect and mobile_width and mobile_height and min_size:
-                    # Get bounding box for the rotated rectangle
-                    bbox, box_points = self.get_rotated_rect_bbox(rect)
-                    
-                    # Check if this looks like a mobile display
-                    if self.has_screen_characteristics(image, bbox):
-                        # Calculate confidence
+                if valid_aspect and w >= 80 and h >= 80:
+                    # Check if this looks like a screen/display
+                    if self.has_screen_characteristics(image, (x, y, w, h)):
+                        # Calculate confidence based on rectangularity
                         perimeter = cv2.arcLength(contour, True)
                         epsilon = 0.02 * perimeter
                         approx = cv2.approxPolyDP(contour, epsilon, True)
-                        rectangularity = 1.0 - abs(len(approx) - 4) * 0.08
-                        confidence = max(0.45, min(0.85, rectangularity))
-                        
-                        # Boost confidence for larger mobile devices
-                        area = rect_w * rect_h
-                        img_area = width * height
-                        area_ratio = area / img_area
-                        
-                        if area_ratio > 0.02:  # At least 2% of image area
-                            confidence_boost = min(0.15, area_ratio * 1.5)  # Up to 0.15 boost
-                            confidence = min(1.0, confidence + confidence_boost)
+                        rectangularity = 1.0 - abs(len(approx) - 4) * 0.1
+                        confidence = max(0.5, min(0.85, rectangularity))
                         
                         detections.append({
-                            'bbox': bbox,
+                            'bbox': (x, y, w, h),
                             'confidence': confidence,
-                            'method': f'Contour-Mobile (angle:{int(angle)}°)',
-                            'aspect_ratio': aspect_ratio,
-                            'angle': angle,
-                            'rotated_rect': box_points
+                            'method': 'Contour+Screen',
+                            'aspect_ratio': aspect_ratio
                         })
         
         return detections
@@ -333,7 +261,7 @@ class AdvancedPanelDetector:
         return detections
     
     def merge_detections(self, detections: List[Dict]) -> List[Dict]:
-        """Merge overlapping detections - prioritize larger, more prominent mobile devices"""
+        """Merge overlapping detections"""
         if not detections:
             return []
         
@@ -346,13 +274,7 @@ class AdvancedPanelDetector:
         y2 = boxes[:, 1] + boxes[:, 3]
         
         areas = boxes[:, 2] * boxes[:, 3]
-        
-        # Create a combined score that prioritizes both confidence and size
-        # Larger objects get a boost in their final score
-        area_normalized = areas / np.max(areas)  # Normalize areas to 0-1
-        combined_scores = scores * 0.7 + area_normalized * 0.3  # 70% confidence, 30% size
-        
-        order = combined_scores.argsort()[::-1]  # Sort by combined score
+        order = scores.argsort()[::-1]
         
         keep = []
         while order.size > 0:
@@ -370,7 +292,7 @@ class AdvancedPanelDetector:
             
             iou = intersection / (areas[i] + areas[order[1:]] - intersection)
             
-            inds = np.where(iou <= 0.35)[0]
+            inds = np.where(iou <= 0.4)[0]
             order = order[inds + 1]
         
         return [detections[i] for i in keep]
@@ -913,61 +835,58 @@ class AdvancedPanelDetector:
         return accessory_detections
 
     def detect(self, image: np.ndarray) -> List[Dict]:
-        """Enhanced mobile panel detection with display issue detection"""
+        """Hybrid detection: YOLO + Smart Contours"""
         all_detections = []
         
-        # Method 1: YOLO (specifically for mobile devices)
+        # Method 1: YOLO (preferred)
         yolo_detections = self.detect_with_yolo(image)
         all_detections.extend(yolo_detections)
         
-        # Method 2: Contour detection (mobile-sized objects only)
-        contour_detections = self.detect_with_contours(image)
-        all_detections.extend(contour_detections)
+        # Method 2: Contour with screen characteristics (if YOLO finds nothing)
+        if len(yolo_detections) == 0:
+            contour_detections = self.detect_with_contours(image)
+            all_detections.extend(contour_detections)
         
-        # Method 3: Color-based detection (excludes dark bars)
-        color_detections = self.detect_with_color(image)
-        all_detections.extend(color_detections)
-        
-        # Merge overlapping panel detections first
-        panel_detections = self.merge_detections(all_detections)
+        # Merge overlapping detections
+        final_detections = self.merge_detections(all_detections)
         
         # Now detect display issues on the found panels
         display_issue_detections = []
         
-        if panel_detections:
+        if final_detections:
             # Detect cables across screen
-            cable_detections = self.detect_cables_across_screen(image, panel_detections)
+            cable_detections = self.detect_cables_across_screen(image, final_detections)
             display_issue_detections.extend(cable_detections)
             
             # Detect earbuds on display
-            earbud_detections = self.detect_earbuds_on_display(image, panel_detections)
+            earbud_detections = self.detect_earbuds_on_display(image, final_detections)
             display_issue_detections.extend(earbud_detections)
             
             # Detect protective case overhang
-            case_detections = self.detect_protective_case_overhang(image, panel_detections)
+            case_detections = self.detect_protective_case_overhang(image, final_detections)
             display_issue_detections.extend(case_detections)
             
             # Detect screen protector misalignment
-            protector_detections = self.detect_screen_protector_misalignment(image, panel_detections)
+            protector_detections = self.detect_screen_protector_misalignment(image, final_detections)
             display_issue_detections.extend(protector_detections)
             
             # Detect stickers on panel
-            sticker_detections = self.detect_stickers_on_panel(image, panel_detections)
+            sticker_detections = self.detect_stickers_on_panel(image, final_detections)
             display_issue_detections.extend(sticker_detections)
             
             # Detect debris covering screen
-            debris_detections = self.detect_debris_covering_screen(image, panel_detections)
+            debris_detections = self.detect_debris_covering_screen(image, final_detections)
             display_issue_detections.extend(debris_detections)
             
             # Detect external mounts/holders
-            mount_detections = self.detect_external_mounts_holders(image, panel_detections)
+            mount_detections = self.detect_external_mounts_holders(image, final_detections)
             display_issue_detections.extend(mount_detections)
             
             # Detect misplaced accessories
-            accessory_detections = self.detect_misplaced_accessories(image, panel_detections)
+            accessory_detections = self.detect_misplaced_accessories(image, final_detections)
             display_issue_detections.extend(accessory_detections)
         
         # Combine panel detections with display issue detections
-        final_detections = panel_detections + display_issue_detections
+        all_final_detections = final_detections + display_issue_detections
         
-        return final_detections
+        return all_final_detections

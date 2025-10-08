@@ -22,8 +22,8 @@ class AdvancedPanelDetector:
             yolo_model_path: Path to YOLO model file
         """
         # Lower confidence for better detection of angled panels and dark screens
-        self.min_yolo_confidence = 0.25
-        self.min_contour_confidence = 0.35
+        self.min_yolo_confidence = 0.10
+        self.min_contour_confidence = 0.20
         
         # Initialize YOLO model
         try:
@@ -55,9 +55,9 @@ class AdvancedPanelDetector:
                     w, h = x2 - x1, y2 - y1
                     
                     # Mobile device size constraints (not too large like TVs/monitors)
-                    # Typical mobile devices are smaller than 12% of image width/height
-                    max_mobile_width = width * 0.12
-                    max_mobile_height = height * 0.12
+                    # Typical mobile devices are smaller than 25% of image width/height
+                    max_mobile_width = width * 0.25
+                    max_mobile_height = height * 0.25
                     
                     if (w >= 80 and h >= 80 and 
                         w <= max_mobile_width and h <= max_mobile_height):
@@ -65,6 +65,16 @@ class AdvancedPanelDetector:
                         # Additional check: aspect ratio should be reasonable for mobile devices
                         aspect_ratio = w / h if h > 0 else 0
                         if 0.5 <= aspect_ratio <= 2.2:  # Mobile devices typically 0.5-2.2
+                            # Boost confidence for larger mobile devices (main phones vs small objects)
+                            area = w * h
+                            img_area = width * height
+                            area_ratio = area / img_area
+                            
+                            # Give higher confidence to devices that are reasonably sized (not too small)
+                            if area_ratio > 0.01:  # At least 1% of image area
+                                confidence_boost = min(0.2, area_ratio * 2)  # Up to 0.2 boost
+                                confidence = min(1.0, confidence + confidence_boost)
+                            
                             detections.append({
                                 'bbox': (x1, y1, w, h),
                                 'confidence': confidence,
@@ -107,19 +117,19 @@ class AdvancedPanelDetector:
         
         # Check 1: Not too dark (exclude dark bars/black screens)
         mean_brightness = np.mean(gray)
-        not_too_dark = mean_brightness > 5  # Very lenient for dark screens
+        not_too_dark = mean_brightness > 0  # Accept any brightness for dark screens
         
         # Check 2: Not too bright (exclude bright lights/reflections)
         not_too_bright = mean_brightness < 240
         
         # Check 3: Standard deviation (screens have content variation)
         std_dev = np.std(gray)
-        has_content = std_dev > 3  # Very low threshold for dark screens
+        has_content = std_dev > 1  # Very low threshold for dark screens
         
         # Check 4: Edge density (mobile screens have text/icons)
         edges = cv2.Canny(gray, 30, 100)
         edge_density = np.sum(edges > 0) / edges.size
-        has_edges = edge_density > 0.005  # Very low threshold for dark screens
+        has_edges = edge_density > 0.001  # Very low threshold for dark screens
         
         # Check 5: Color variety (mobile screens have diverse colors)
         h_hist = cv2.calcHist([hsv], [0], None, [180], [0, 180])
@@ -134,25 +144,25 @@ class AdvancedPanelDetector:
         # Check 7: Texture analysis (mobile screens have fine texture)
         laplacian = cv2.Laplacian(gray, cv2.CV_64F)
         texture_variance = laplacian.var()
-        has_texture = texture_variance > 5  # Very low threshold for dark screens
+        has_texture = texture_variance > 1  # Very low threshold for dark screens
         
         # Check 8: Size constraint for mobile devices (not TV/monitor sized)
         img_area = img_h * img_w
         roi_area = w * h
-        mobile_size = roi_area < (img_area * 0.08)  # Mobile devices < 8% of image
+        mobile_size = roi_area < (img_area * 0.30)  # Mobile devices < 30% of image
         
         # Check 9: Aspect ratio for mobile devices
         aspect_ratio = w / h if h > 0 else 0
         mobile_aspect = 0.5 <= aspect_ratio <= 2.2  # Mobile device aspect ratios
         
         # Check 10: Minimum size for mobile devices
-        min_mobile_size = w >= 80 and h >= 80
+        min_mobile_size = w >= 30 and h >= 30
         
-        # Score the region (need at least 3 out of 10 for mobile display - very lenient for dark screens)
+        # Score the region (need at least 1 out of 10 for mobile display - very lenient for dark screens)
         score = sum([not_too_dark, not_too_bright, has_content, has_edges, 
                     has_colors, not_uniform, has_texture, mobile_size, mobile_aspect, min_mobile_size])
         
-        return score >= 3
+        return score >= 1
     
     def detect_with_contours(self, image: np.ndarray) -> List[Dict]:
         """Detect rectangular objects - specifically for mobile displays"""
@@ -177,8 +187,8 @@ class AdvancedPanelDetector:
         img_area = height * width
         
         # Mobile device size constraints (much smaller than TVs/monitors)
-        min_area = img_area * 0.002  # 0.2% minimum (mobile devices)
-        max_area = img_area * 0.15   # 15% maximum (exclude large displays)
+        min_area = img_area * 0.001  # 0.1% minimum (mobile devices)
+        max_area = img_area * 0.30   # 30% maximum (exclude large displays)
         
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -201,9 +211,12 @@ class AdvancedPanelDetector:
                 mobile_aspect = 0.5 <= aspect_ratio <= 2.2
                 
                 # Size constraints for mobile devices
-                mobile_width = rect_w <= width * 0.25  # Max 25% of image width
-                mobile_height = rect_h <= height * 0.25  # Max 25% of image height
-                min_size = rect_w >= 50 and rect_h >= 50  # Smaller minimum size
+                mobile_width = rect_w <= width * 0.40  # Max 40% of image width
+                mobile_height = rect_h <= height * 0.40  # Max 40% of image height
+                min_size = rect_w >= 20 and rect_h >= 20  # Smaller minimum size for main smartphones
+                
+                # Exclude very thin objects (cables, wires) - both dimensions should be reasonable
+                not_too_thin = min(rect_w, rect_h) >= max(rect_w, rect_h) * 0.2  # Width/height ratio not too extreme
                 
                 if mobile_aspect and mobile_width and mobile_height and min_size:
                     # Get bounding box for the rotated rectangle
@@ -217,6 +230,15 @@ class AdvancedPanelDetector:
                         approx = cv2.approxPolyDP(contour, epsilon, True)
                         rectangularity = 1.0 - abs(len(approx) - 4) * 0.08
                         confidence = max(0.45, min(0.85, rectangularity))
+                        
+                        # Boost confidence for larger mobile devices
+                        area = rect_w * rect_h
+                        img_area = width * height
+                        area_ratio = area / img_area
+                        
+                        if area_ratio > 0.02:  # At least 2% of image area
+                            confidence_boost = min(0.15, area_ratio * 1.5)  # Up to 0.15 boost
+                            confidence = min(1.0, confidence + confidence_boost)
                         
                         detections.append({
                             'bbox': bbox,
@@ -249,13 +271,16 @@ class AdvancedPanelDetector:
         # Range 4: Green screens (mobile apps)
         masks.append(cv2.inRange(hsv, np.array([40, 50, 50]), np.array([80, 255, 255])))
         
+        # Range 5: Dark screens (mobile devices with dark/black screens)
+        masks.append(cv2.inRange(gray, 5, 100))  # Dark but not completely black
+        
         # Combine all masks
         mask = masks[0]
         for m in masks[1:]:
             mask = cv2.bitwise_or(mask, m)
         
-        # Exclude very dark regions (dark bars, black screens)
-        dark_mask = cv2.inRange(gray, 0, 50)
+        # Include dark regions for mobile screens (but exclude completely black)
+        dark_mask = cv2.inRange(gray, 0, 5)  # Only exclude completely black
         mask = cv2.bitwise_and(mask, cv2.bitwise_not(dark_mask))
         
         # Clean up mask
@@ -269,9 +294,9 @@ class AdvancedPanelDetector:
         height, width = image.shape[:2]
         img_area = height * width
         
-        # Mobile device size constraints
-        min_area = img_area * 0.005  # 0.5% minimum
-        max_area = img_area * 0.08   # 8% maximum (exclude large displays)
+        # Mobile device size constraints - prioritize larger devices
+        min_area = img_area * 0.002  # 0.2% minimum (allow main smartphones)
+        max_area = img_area * 0.30   # 30% maximum (exclude large displays)
         
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -308,7 +333,7 @@ class AdvancedPanelDetector:
         return detections
     
     def merge_detections(self, detections: List[Dict]) -> List[Dict]:
-        """Merge overlapping detections"""
+        """Merge overlapping detections - prioritize larger, more prominent mobile devices"""
         if not detections:
             return []
         
@@ -321,7 +346,13 @@ class AdvancedPanelDetector:
         y2 = boxes[:, 1] + boxes[:, 3]
         
         areas = boxes[:, 2] * boxes[:, 3]
-        order = scores.argsort()[::-1]
+        
+        # Create a combined score that prioritizes both confidence and size
+        # Larger objects get a boost in their final score
+        area_normalized = areas / np.max(areas)  # Normalize areas to 0-1
+        combined_scores = scores * 0.7 + area_normalized * 0.3  # 70% confidence, 30% size
+        
+        order = combined_scores.argsort()[::-1]  # Sort by combined score
         
         keep = []
         while order.size > 0:

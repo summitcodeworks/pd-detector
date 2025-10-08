@@ -46,14 +46,14 @@ Detect panels in a single image. Accepts:
 
 **Request (File Upload):**
 ```bash
-curl -X POST -F "file=@image.jpg" http://localhost:5000/detect
+curl -X POST -F "file=@image.jpg" http://localhost:6000/detect
 ```
 
 **Request (Base64):**
 ```bash
 curl -X POST -H "Content-Type: application/json" \
   -d '{"image":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."}' \
-  http://localhost:5000/detect
+  http://localhost:6000/detect
 ```
 
 **Response:**
@@ -73,7 +73,7 @@ curl -X POST -H "Content-Type: application/json" \
       "area": 60000
     }
   ],
-  "processed_image_url": "http://localhost:5000/processed/image_20241201_143022_a1b2c3d4.jpg",
+  "processed_image_url": "http://localhost:6000/processed/image_20241201_143022_a1b2c3d4.jpg",
   "saved_filename": "image_20241201_143022_a1b2c3d4.jpg",
   "message": "Detected 1 mobile panel(s)",
   "image_size": {"width": 1920, "height": 1080},
@@ -101,7 +101,7 @@ Process multiple images at once via `files` parameter.
 
 **Request:**
 ```bash
-curl -X POST -F "files=@image1.jpg" -F "files=@image2.jpg" http://localhost:5000/detect/batch
+curl -X POST -F "files=@image1.jpg" -F "files=@image2.jpg" http://localhost:6000/detect/batch
 ```
 
 **Response:**
@@ -117,7 +117,7 @@ curl -X POST -F "files=@image1.jpg" -F "files=@image2.jpg" http://localhost:5000
       "panel_count": 1,
       "confidence": 0.823,
       "result": "NG",
-      "processed_image_url": "http://localhost:5000/processed/image1_20241201_143022_a1b2c3d4.jpg",
+      "processed_image_url": "http://localhost:6000/processed/image1_20241201_143022_a1b2c3d4.jpg",
       "saved_filename": "image1_20241201_143022_a1b2c3d4.jpg"
     },
     {
@@ -126,7 +126,7 @@ curl -X POST -F "files=@image1.jpg" -F "files=@image2.jpg" http://localhost:5000
       "panel_count": 0,
       "confidence": 0.0,
       "result": "OK",
-      "processed_image_url": "http://localhost:5000/processed/image2_20241201_143022_b2c3d4e5.jpg",
+      "processed_image_url": "http://localhost:6000/processed/image2_20241201_143022_b2c3d4e5.jpg",
       "saved_filename": "image2_20241201_143022_b2c3d4e5.jpg"
     }
   ]
@@ -190,7 +190,7 @@ The API can be configured using environment variables:
 FLASK_ENV=development
 FLASK_DEBUG=True
 FLASK_HOST=0.0.0.0
-FLASK_PORT=5000
+FLASK_PORT=6000
 
 # Base URL for image URLs (important for production)
 BASE_URL=http://your-domain.com

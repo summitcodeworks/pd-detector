@@ -149,7 +149,7 @@ def mark_image(image: np.ndarray, detections: List[Dict]) -> np.ndarray:
 
 def save_processed_image(image: np.ndarray, detections: List[Dict], 
                         original_filename: Optional[str] = None, 
-                        base_url: str = "http://localhost:5000") -> Tuple[str, str]:
+                        base_url: str = "http://localhost:6000") -> Tuple[str, str]:
     """
     Save processed image and return URL
     

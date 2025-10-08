@@ -14,7 +14,7 @@ class Config:
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
     FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
-    FLASK_PORT = int(os.getenv('FLASK_PORT', 5000))
+    FLASK_PORT = int(os.getenv('FLASK_PORT', 6000))
     
     # YOLO Model Configuration
     YOLO_MODEL_PATH = os.getenv('YOLO_MODEL_PATH', 'yolov8n.pt')
@@ -38,7 +38,7 @@ class Config:
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))  # 16MB
     
     # Base URL Configuration
-    BASE_URL = os.getenv('BASE_URL', 'http://localhost:5000')
+    BASE_URL = os.getenv('BASE_URL', 'http://localhost:6000')
 
 class DevelopmentConfig(Config):
     """Development configuration"""

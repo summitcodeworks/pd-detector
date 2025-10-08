@@ -42,7 +42,7 @@ if [ $? -eq 0 ]; then
     echo "2. Run the application:"
     echo "   python main.py"
     echo ""
-    echo "3. The API will be available at: http://localhost:5000"
+    echo "3. The API will be available at: http://localhost:6000"
     echo ""
     echo "For more information, see README.md"
 else

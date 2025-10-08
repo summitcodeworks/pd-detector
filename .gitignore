@@ -217,3 +217,16 @@ models/
 *.pth
 *.onnx
 *.weights
+
+# Image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.svg
+*.ico
+processed/

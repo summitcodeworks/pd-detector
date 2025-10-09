@@ -108,7 +108,11 @@ class TestAPI:
         assert 'result' in data
         assert 'panel_count' in data
         assert 'confidence' in data
-        assert 'detections' in data
+        assert 'panels' in data
+        assert 'display_issues' in data
+        assert 'has_display_issues' in data
+        assert 'display_issue_count' in data
+        assert 'issue_summary' in data
         assert 'processed_image_url' in data
         assert 'saved_filename' in data
         assert 'message' in data

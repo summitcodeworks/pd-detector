@@ -21,9 +21,9 @@ class AdvancedPanelDetector:
         Args:
             yolo_model_path: Path to YOLO model file
         """
-        # Higher confidence for better selectivity - focus on main smartphones
-        self.min_yolo_confidence = 0.40
-        self.min_contour_confidence = 0.50
+        # Lower confidence threshold to detect more potential phones
+        self.min_yolo_confidence = 0.25  # Reduced from 0.40
+        self.min_contour_confidence = 0.30  # Reduced from 0.50
         
         # Initialize YOLO model
         try:
@@ -54,25 +54,24 @@ class AdvancedPanelDetector:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     w, h = x2 - x1, y2 - y1
                     
-                    # Mobile device size constraints (not too large like TVs/monitors)
-                    # Typical mobile devices are smaller than 25% of image width/height
+                    # Mobile device size constraints
                     max_mobile_width = width * 0.25
                     max_mobile_height = height * 0.25
                     
-                    if (w >= 80 and h >= 80 and 
+                    if (w >= 50 and h >= 50 and  # Reduced minimum size from 80 to 50
                         w <= max_mobile_width and h <= max_mobile_height):
                         
-                        # Additional check: aspect ratio should be reasonable for mobile devices
+                        # Aspect ratio check
                         aspect_ratio = w / h if h > 0 else 0
-                        if 0.5 <= aspect_ratio <= 2.2:  # Mobile devices typically 0.5-2.2
-                            # Boost confidence for larger mobile devices (main phones vs small objects)
+                        if 0.4 <= aspect_ratio <= 2.5:  # Slightly expanded from 0.5-2.2
+                            # Boost confidence for larger mobile devices
                             area = w * h
                             img_area = width * height
                             area_ratio = area / img_area
                             
-                            # Give higher confidence to devices that are reasonably sized (not too small)
-                            if area_ratio > 0.01:  # At least 1% of image area
-                                confidence_boost = min(0.2, area_ratio * 2)  # Up to 0.2 boost
+                            # Give higher confidence to devices that are reasonably sized
+                            if area_ratio > 0.005:  # Reduced from 0.01
+                                confidence_boost = min(0.2, area_ratio * 2)
                                 confidence = min(1.0, confidence + confidence_boost)
                             
                             detections.append({
@@ -93,7 +92,7 @@ class AdvancedPanelDetector:
         return (int(x), int(y), int(w), int(h)), box
     
     def has_screen_characteristics(self, image: np.ndarray, bbox: Tuple) -> bool:
-        """Check if region has display/screen characteristics"""
+        """Check if region has display/screen characteristics - modified for dark screens"""
         x, y, w, h = bbox
         
         # Extract region
@@ -107,17 +106,17 @@ class AdvancedPanelDetector:
         
         # Check 1: Standard deviation (screens have content variation)
         std_dev = np.std(gray)
-        has_content = std_dev > 15  # Screens have varying content
+        has_content = std_dev > 10  # Reduced from 15 to handle dark screens
         
         # Check 2: Edge density (screens have text/icons)
-        edges = cv2.Canny(gray, 30, 100)
+        edges = cv2.Canny(gray, 20, 80)  # Reduced thresholds for dark screens
         edge_density = np.sum(edges > 0) / edges.size
-        has_edges = edge_density > 0.05  # At least 5% edges
+        has_edges = edge_density > 0.02  # Reduced from 0.05
         
         # Check 3: Color variety (not uniform like lights/tables)
         h_hist = cv2.calcHist([hsv], [0], None, [180], [0, 180])
-        h_variety = np.count_nonzero(h_hist > 10)  # Multiple color hues
-        has_colors = h_variety > 5
+        h_variety = np.count_nonzero(h_hist > 5)  # Reduced from 10
+        has_colors = h_variety > 3  # Reduced from 5
         
         # Check 4: Brightness (not too bright like lights)
         mean_brightness = np.mean(gray)
@@ -126,12 +125,13 @@ class AdvancedPanelDetector:
         # Check 5: Not uniform (tables/walls are uniform)
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         dominant_value = np.max(hist)
-        not_uniform = dominant_value < (gray.size * 0.8)  # Not 80% same color
+        not_uniform = dominant_value < (gray.size * 0.9)  # Increased from 0.8
         
         # Score the region
         score = sum([has_content, has_edges, has_colors, not_too_bright, not_uniform])
         
-        return score >= 3  # Need at least 3 out of 5 characteristics
+        # Need at least 2 out of 5 characteristics (reduced from 3)
+        return score >= 2
     
     def detect_with_contours(self, image: np.ndarray) -> List[Dict]:
         """Detect rectangular objects with screen characteristics"""
@@ -140,14 +140,14 @@ class AdvancedPanelDetector:
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         
         # Edge detection
-        edges = cv2.Canny(blurred, 50, 150)
+        edges = cv2.Canny(blurred, 30, 100)  # Reduced from 50, 150
         
         # Find contours
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         detections = []
         height, width = image.shape[:2]
-        min_area = (height * width) * 0.04
+        min_area = (height * width) * 0.02  # Reduced from 0.04
         max_area = (height * width) * 0.85
         
         for contour in contours:
@@ -160,7 +160,7 @@ class AdvancedPanelDetector:
                 # Check aspect ratio (phones + partial panels)
                 valid_aspect = (0.3 <= aspect_ratio <= 0.9) or (1.1 <= aspect_ratio <= 3.0)
                 
-                if valid_aspect and w >= 80 and h >= 80:
+                if valid_aspect and w >= 50 and h >= 50:  # Reduced from 80
                     # Check if this looks like a screen/display
                     if self.has_screen_characteristics(image, (x, y, w, h)):
                         # Calculate confidence based on rectangularity
@@ -168,7 +168,7 @@ class AdvancedPanelDetector:
                         epsilon = 0.02 * perimeter
                         approx = cv2.approxPolyDP(contour, epsilon, True)
                         rectangularity = 1.0 - abs(len(approx) - 4) * 0.1
-                        confidence = max(0.5, min(0.85, rectangularity))
+                        confidence = max(0.3, min(0.85, rectangularity))  # Reduced min confidence
                         
                         detections.append({
                             'bbox': (x, y, w, h),
@@ -180,7 +180,7 @@ class AdvancedPanelDetector:
         return detections
     
     def detect_with_color(self, image: np.ndarray) -> List[Dict]:
-        """Detect based on mobile screen colors - excludes dark bars and large displays"""
+        """Detect based on mobile screen colors - modified for dark/off screens"""
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
@@ -200,7 +200,7 @@ class AdvancedPanelDetector:
         masks.append(cv2.inRange(hsv, np.array([40, 50, 50]), np.array([80, 255, 255])))
         
         # Range 5: Dark screens (mobile devices with dark/black screens)
-        masks.append(cv2.inRange(gray, 5, 100))  # Dark but not completely black
+        masks.append(cv2.inRange(gray, 5, 120))  # Expanded from 5-100 to 5-120
         
         # Combine all masks
         mask = masks[0]
@@ -236,20 +236,20 @@ class AdvancedPanelDetector:
                 
                 # Mobile device size and aspect ratio constraints
                 aspect_ratio = w / h if h > 0 else 0
-                mobile_aspect = 0.5 <= aspect_ratio <= 2.2
+                mobile_aspect = 0.4 <= aspect_ratio <= 2.5  # Expanded from 0.5-2.2
                 mobile_width = w <= width * 0.15
                 mobile_height = h <= height * 0.15
-                min_size = w >= 80 and h >= 80
+                min_size = w >= 50 and h >= 50  # Reduced from 80
                 
                 if mobile_aspect and mobile_width and mobile_height and min_size:
-                    # Additional check: not too dark
+                    # Additional check: not too dark (relaxed for off screens)
                     roi = image[y:y+h, x:x+w]
                     if roi.size > 0:
                         roi_gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
                         mean_brightness = np.mean(roi_gray)
                         
                         # Exclude dark bars and very dark regions
-                        if mean_brightness > 40:  # Higher threshold to exclude dark bars
+                        if mean_brightness > 20:  # Reduced from 40 to handle dark screens
                             confidence = min(0.75, area / (img_area * 0.1))
                             detections.append({
                                 'bbox': bbox,
@@ -834,8 +834,14 @@ class AdvancedPanelDetector:
         
         return accessory_detections
 
-    def detect(self, image: np.ndarray) -> List[Dict]:
-        """Hybrid detection: YOLO + Smart Contours"""
+    def detect(self, image: np.ndarray) -> Tuple[List[Dict], Dict]:
+        """Hybrid detection: YOLO + Smart Contours
+        
+        Returns:
+            Tuple of (detections, status_info)
+            - detections: List of detection dictionaries with 'bbox' keys
+            - status_info: Dictionary with 'status', 'message', and 'panel_count'
+        """
         all_detections = []
         
         # Method 1: YOLO (preferred)
@@ -846,6 +852,11 @@ class AdvancedPanelDetector:
         if len(yolo_detections) == 0:
             contour_detections = self.detect_with_contours(image)
             all_detections.extend(contour_detections)
+        
+        # Method 3: Color-based detection (if still nothing found)
+        if len(yolo_detections) == 0 and len(all_detections) == 0:
+            color_detections = self.detect_with_color(image)
+            all_detections.extend(color_detections)
         
         # Merge overlapping detections
         final_detections = self.merge_detections(all_detections)
@@ -889,4 +900,20 @@ class AdvancedPanelDetector:
         # Combine panel detections with display issue detections
         all_final_detections = final_detections + display_issue_detections
         
-        return all_final_detections
+        # Create status information separately (not added to detections list)
+        # If any panel is detected, mark as NG (Not Good)
+        if final_detections:
+            status_info = {
+                'status': 'NG',
+                'message': f'PANEL DETECTED - NG ({len(final_detections)} found)',
+                'panel_count': len(final_detections)
+            }
+        else:
+            status_info = {
+                'status': 'OK',
+                'message': 'OK - No Panel Detected',
+                'panel_count': 0
+            }
+        
+        return all_final_detections, status_info
+

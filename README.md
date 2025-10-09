@@ -202,9 +202,22 @@ pd-backend/
 │       └── utils/                    # Utilities
 │           ├── config.py             # Configuration management
 │           └── image_utils.py        # Image processing utilities
+├── training/                         # Model training pipeline
+│   ├── README.md                     # Training documentation
+│   ├── QUICK_START.md                # Quick start guide
+│   ├── TROUBLESHOOTING.md            # Common issues
+│   ├── requirements_training.txt     # Training dependencies
+│   ├── download_dataset.py           # Dataset downloader
+│   ├── train_yolo.py                 # Model training
+│   ├── evaluate_model.py             # Model evaluation
+│   ├── deploy_model.py               # Model deployment
+│   ├── auto_train.py                 # Automated pipeline
+│   └── collect_training_data.py      # Data collection helper
 ├── tests/                            # Test suite
 │   ├── test_api.py                   # API endpoint tests
 │   └── test_detector.py              # Detection algorithm tests
+├── models/                           # Trained models directory
+│   └── mobile_panel_custom.pt        # Custom trained model
 └── docs/                             # Documentation
     └── API.md                        # API documentation
 ```
@@ -247,6 +260,70 @@ The API uses three complementary detection methods:
 3. **Color-based Detection**: Detects screen-like colors and patterns
 
 Results from all methods are merged and overlapping detections are removed using Non-Maximum Suppression.
+
+## Custom Model Training
+
+For best results, train a custom YOLO model on your specific manufacturing environment.
+
+### Quick Start Training
+
+```bash
+# 1. Collect training data from your production images
+python training/collect_training_data.py --uploads uploads --processed processed
+
+# 2. Label your images using Roboflow, LabelImg, or CVAT
+#    See training/QUICK_START.md for detailed instructions
+
+# 3. Run automated training pipeline
+python training/auto_train.py --all
+
+# 4. Your custom model will be automatically deployed
+```
+
+### Manual Training Steps
+
+```bash
+# 1. Setup dataset structure
+python training/download_dataset.py --source custom --output training/datasets
+
+# 2. Add and label your images (see training/QUICK_START.md)
+
+# 3. Train model
+python training/train_yolo.py \
+    --data training/datasets/custom_dataset/data.yaml \
+    --epochs 100 \
+    --batch 16
+
+# 4. Evaluate model
+python training/evaluate_model.py \
+    --model training/runs/detect/mobile_panel_train/weights/best.pt \
+    --data training/datasets/custom_dataset/data.yaml
+
+# 5. Deploy model
+python training/deploy_model.py \
+    --model training/runs/detect/mobile_panel_train/weights/best.pt \
+    --test
+```
+
+### Training Resources
+
+- **Quick Start Guide**: `training/QUICK_START.md` - Complete training tutorial
+- **Troubleshooting**: `training/TROUBLESHOOTING.md` - Common issues and solutions
+- **Training README**: `training/README.md` - Detailed training pipeline documentation
+- **Requirements**: `training/requirements_training.txt` - Additional dependencies for training
+
+### Why Train a Custom Model?
+
+- **Improved Accuracy**: Learn your specific setup (lighting, angles, device types)
+- **Reduced False Positives**: Understand what is NOT a panel in your environment
+- **Detect Specific Defects**: Train on your unique manufacturing issues
+- **Better Edge Cases**: Handle rotations, reflections, partial views specific to your line
+
+### Training Requirements
+
+- **Minimum**: 200+ labeled images, 5 GB storage, 8 GB RAM
+- **Recommended**: 1000+ labeled images, GPU with 6+ GB VRAM, 16 GB RAM
+- **Time**: 1-3 hours with GPU, 5-15 hours with CPU
 
 ## Command Reference
 

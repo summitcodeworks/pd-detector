@@ -1,0 +1,30 @@
+# Training-specific requirements
+# Install with: pip install -r training/requirements_training.txt
+
+# Core training
+ultralytics>=8.0.0
+tensorboard>=2.14.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Dataset handling
+roboflow>=1.1.0
+kaggle>=1.5.16
+requests>=2.31.0
+gdown>=4.7.1
+
+# Image processing
+albumentations>=1.3.1
+imgaug>=0.4.0
+
+# Utilities
+tqdm>=4.66.0
+pyyaml>=6.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+pandas>=2.0.0
+
+# Note: LabelImg is optional and can be installed separately if needed:
+# pip install labelImg
+# It has setuptools compatibility issues on some systems.
+# Alternative: Use Roboflow (cloud) or CVAT (web) for labeling instead.

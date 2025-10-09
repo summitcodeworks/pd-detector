@@ -1,0 +1,14 @@
+{
+  "collection_date": "2025-10-08T21:48:01.307716",
+  "total_images": 3,
+  "sources": [
+    "uploads",
+    "processed"
+  ],
+  "destination": "training/datasets/my_data",
+  "images": [
+    "2025-10-07 06.11.27_20251008_212215_c7aed13b.jpg",
+    "2025-10-07 06.11.27_20251008_211929_541ebe63.jpg",
+    "2025-10-07 06.11.27_20251008_213407_97a1c62e.jpg"
+  ]
+}

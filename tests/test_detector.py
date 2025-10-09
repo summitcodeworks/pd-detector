@@ -23,8 +23,8 @@ class TestAdvancedPanelDetector:
     def test_detector_initialization(self):
         """Test detector initialization"""
         assert self.detector is not None
-        assert self.detector.min_yolo_confidence == 0.35
-        assert self.detector.min_contour_confidence == 0.45
+        assert self.detector.min_yolo_confidence == 0.25
+        assert self.detector.min_contour_confidence == 0.30
     
     def test_get_rotated_rect_bbox(self):
         """Test rotated rectangle bounding box calculation"""
@@ -80,8 +80,12 @@ class TestAdvancedPanelDetector:
         """Test detection with very small image"""
         small_image = np.random.randint(0, 255, (50, 50, 3), dtype=np.uint8)
         
-        detections = self.detector.detect(small_image)
+        detections, status_info = self.detector.detect(small_image)
         assert isinstance(detections, list)
+        assert isinstance(status_info, dict)
+        assert 'status' in status_info
+        assert 'message' in status_info
+        assert 'panel_count' in status_info
     
     def test_merge_detections_empty(self):
         """Test merging empty detections"""
@@ -106,6 +110,7 @@ class TestAdvancedPanelDetector:
         # Create a realistic test image
         test_image = np.random.randint(100, 150, (400, 600, 3), dtype=np.uint8)
         
-        detections = self.detector.detect(test_image)
+        detections, status_info = self.detector.detect(test_image)
         assert isinstance(detections, list)
+        assert isinstance(status_info, dict)
         # In a realistic scenario, we might not detect anything in random noise

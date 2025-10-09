@@ -1,0 +1,13 @@
+# Panel Detection Dataset
+# Auto-generated from uploads folder
+# Images: 502 (train: 401, val: 101)
+
+path: /Users/debarunlahiri/Development/PythonProjects/pd-backend/training/datasets/panel_dataset
+train: train
+val: val
+
+# Classes
+names:
+  0: mobile_panel
+
+nc: 1

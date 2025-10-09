@@ -5,6 +5,7 @@ This module contains all the Flask routes for the Mobile Panel Detection API.
 """
 
 import base64
+import os
 import traceback
 from flask import request, jsonify, send_file
 import cv2
@@ -109,10 +110,10 @@ def create_routes(app):
                 return jsonify({"error": "Invalid image format"}), 400
             
             # Detect panels and display issues
-            detections = detector.detect(image)
+            detections, status_info = detector.detect(image)
             
             # Separate panel detections from display issue detections
-            panel_detections = [d for d in detections if 'issue_type' not in d]
+            panel_detections = [d for d in detections if 'issue_type' not in d and 'status' not in d]
             display_issue_detections = [d for d in detections if 'issue_type' in d]
             
             # Group display issues by type
@@ -221,7 +222,7 @@ def create_routes(app):
             if not validate_image(image):
                 return jsonify({"error": "Invalid image format"}), 400
             
-            detections = detector.detect(image)
+            detections, status_info = detector.detect(image)
             marked_image = mark_image(image, detections)
             
             # Save processed image and get URL
@@ -235,20 +236,22 @@ def create_routes(app):
             byte_io = BytesIO(buffer)
             byte_io.seek(0)
             
-            status = "NG" if detections else "OK"
+            # Use status_info from detection results
+            status = status_info['status']
+            panel_count = status_info['panel_count']
             
             # Return both the file and URL information
             response = send_file(
                 byte_io,
                 mimetype='image/jpeg',
                 as_attachment=True,
-                download_name=f'marked_{status}_{len(detections)}panels.jpg'
+                download_name=f'marked_{status}_{panel_count}panels.jpg'
             )
             
             # Add custom headers with URL information
             response.headers['X-Processed-Image-URL'] = image_url
             response.headers['X-Saved-Filename'] = saved_filename
-            response.headers['X-Panel-Count'] = str(len(detections))
+            response.headers['X-Panel-Count'] = str(panel_count)
             response.headers['X-Status'] = status
             
             return response
@@ -274,7 +277,7 @@ def create_routes(app):
                     image = decode_image_from_request(image_bytes)
                     
                     if validate_image(image):
-                        detections = detector.detect(image)
+                        detections, status_info = detector.detect(image)
                         marked_image = mark_image(image, detections)
                         
                         # Save processed image and get URL
@@ -283,7 +286,7 @@ def create_routes(app):
                         )
                         
                         # Separate panel detections from display issue detections
-                        panel_detections = [d for d in detections if 'issue_type' not in d]
+                        panel_detections = [d for d in detections if 'issue_type' not in d and 'status' not in d]
                         display_issue_detections = [d for d in detections if 'issue_type' in d]
                         
                         avg_confidence = sum(d['confidence'] for d in detections) / len(detections) if detections else 0.0

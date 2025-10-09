@@ -1,0 +1,16 @@
+# Mobile Panel Detection Dataset
+# Created: download_dataset
+
+path: /Users/debarunlahiri/Development/PythonProjects/pd-backend/training/datasets/custom_dataset  # dataset root dir
+train: images/train  # train images (relative to 'path')
+val: images/val  # val images (relative to 'path')
+test: images/test  # test images (relative to 'path')
+
+# Classes
+names:
+  0: mobile_panel
+  1: mobile_display
+  2: panel_with_defect
+
+# Number of classes
+nc: 3

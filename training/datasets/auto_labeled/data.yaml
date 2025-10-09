@@ -1,0 +1,13 @@
+# Auto-labeled Mobile Panel Dataset
+# Created by auto_label.py
+
+path: /Users/debarunlahiri/Development/PythonProjects/pd-backend/training/datasets/auto_labeled
+train: images/train
+val: images/train  # Using same for now, split manually if needed
+test: images/train
+
+# Classes
+names:
+  0: mobile_panel
+
+nc: 1
